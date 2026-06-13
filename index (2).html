@@ -1,0 +1,1910 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0d1117">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Trader Drill">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>Trader Drill</title>
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b22; --border: #30363d;
+    --text: #e6edf3; --muted: #8b949e; --accent: #58a6ff;
+    --good: #3fb950; --bad: #f85149; --warn: #d29922; --field: #21262d;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    height: 100%; background: var(--bg); color: var(--text);
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    -webkit-text-size-adjust: 100%; overflow: hidden;
+  }
+  body {
+    display: flex; flex-direction: column;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+  #app { flex: 1; display: flex; flex-direction: column; padding: 16px; gap: 12px; }
+
+  .topbar { display: flex; justify-content: space-between; align-items: center; }
+  .timer { font-size: 28px; font-weight: 700; letter-spacing: 1px; }
+  .timer.urgent { color: var(--bad); }
+  .score { font-size: 14px; color: var(--muted); }
+  .score b { color: var(--text); }
+  .gear {
+    background: var(--field); border: 1px solid var(--border); color: var(--text);
+    width: 40px; height: 40px; border-radius: 10px; font-size: 18px;
+  }
+
+  .card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
+    padding: 20px 16px; display: flex; flex-direction: column; gap: 16px;
+  }
+  .prompt-label { font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: 1.5px; }
+  .eq { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px 10px; }
+  .tok { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+  .tok .v { font-size: 26px; font-weight: 700; }
+  .tok .k { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
+  .tok.target .v { color: var(--accent); }
+  .op { font-size: 22px; color: var(--muted); padding: 0 2px; }
+
+  .answer {
+    background: var(--field); border: 2px solid var(--border); border-radius: 12px;
+    text-align: center; font-size: 32px; font-weight: 700; padding: 13px 8px;
+    min-height: 60px; color: var(--accent); letter-spacing: 1px;
+  }
+  .answer.flash-good { border-color: var(--good); }
+  .answer.flash-bad  { border-color: var(--bad); }
+
+  .quote { display: flex; gap: 10px; }
+  .qbox {
+    flex: 1; background: var(--field); border: 2px solid var(--border); border-radius: 12px;
+    padding: 8px; text-align: center;
+  }
+  .qbox.active { border-color: var(--accent); }
+  .qbox .ql { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
+  .qbox .qv { font-size: 30px; font-weight: 700; min-height: 38px; letter-spacing: 1px; }
+  .qbox.bid .qv { color: var(--good); }
+  .qbox.ask .qv { color: var(--bad); }
+  .qbox.flash-good { border-color: var(--good); }
+  .qbox.flash-bad  { border-color: var(--bad); }
+  .verdict { font-size: 13px; min-height: 18px; color: var(--muted); text-align: center; }
+  .verdict.good { color: var(--good); }
+  .verdict.bad  { color: var(--bad); }
+  .verdict.warn { color: var(--warn); }
+
+  .keypad {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 9px; margin-top: auto;
+    /* Reserve space so the full 5-row keypad always fits, even when the
+       coach bubble is open above it. */
+    min-height: 320px;
+  }
+  .key {
+    background: var(--field); border: 1px solid var(--border); color: var(--text);
+    font-family: inherit; font-size: 22px; font-weight: 600;
+    padding: 12px 0; border-radius: 12px; transition: transform .04s, background .1s;
+  }
+  .key:active { transform: scale(0.94); background: #2d333b; }
+  .key.act { color: var(--accent); }
+  .key.del { color: var(--bad); }
+  .key:disabled { opacity: 0.32; }
+
+  .overlay {
+    position: fixed; inset: 0; background: rgba(13,17,23,0.98);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 16px; padding: 28px; text-align: center; z-index: 50; overflow-y: auto;
+  }
+  .overlay h1 { font-size: 25px; color: var(--accent); }
+  .overlay .big { font-size: 60px; font-weight: 800; }
+  .overlay .sub { color: var(--muted); font-size: 14px; line-height: 1.5; }
+  .btn {
+    background: var(--accent); color: #0d1117; border: none; font-family: inherit;
+    font-size: 17px; font-weight: 700; padding: 15px 38px; border-radius: 12px;
+  }
+  .btn:active { opacity: 0.85; }
+  .btn.ghost { background: transparent; color: var(--accent); border: 1px solid var(--border); }
+  .btn.sm { font-size: 14px; padding: 11px 22px; }
+  .stats { display: flex; gap: 24px; flex-wrap: wrap; justify-content: center; }
+  .stats div { display: flex; flex-direction: column; }
+  .stats .n { font-size: 28px; font-weight: 700; }
+  .stats .l { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
+  .hidden { display: none !important; }
+  .rowbtns { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+
+  .modeswitch { display: flex; border: 1px solid var(--border); border-radius: 11px; overflow: hidden; }
+  .modeswitch button {
+    background: var(--field); color: var(--muted); border: none; font-family: inherit;
+    font-size: 14px; font-weight: 600; padding: 12px 22px;
+  }
+  .modeswitch button.on { background: var(--accent); color: #0d1117; }
+
+  /* settings */
+  .panel-scroll { max-width: 460px; width: 100%; margin: 0 auto; }
+  .setgroup-label {
+    font-size: 12px; color: var(--accent); text-transform: uppercase; letter-spacing: 1.5px;
+    text-align: left; margin: 14px 4px 4px;
+  }
+  .setrow {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 12px 4px; border-bottom: 1px solid var(--border); gap: 12px;
+  }
+  .setrow .lbl { text-align: left; }
+  .setrow .lbl .t { font-size: 14px; }
+  .setrow .lbl .d { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .seg { display: flex; border: 1px solid var(--border); border-radius: 9px; overflow: hidden; flex-shrink: 0; }
+  .seg button {
+    background: var(--field); color: var(--muted); border: none; font-family: inherit;
+    font-size: 12px; padding: 8px 11px;
+  }
+  .seg button.on { background: var(--accent); color: #0d1117; font-weight: 700; }
+  .numfield {
+    background: var(--field); border: 1px solid var(--border); color: var(--text);
+    font-family: inherit; font-size: 14px; width: 66px; text-align: center;
+    padding: 8px 4px; border-radius: 9px;
+  }
+
+  /* tutorial */
+  .coach {
+    background: var(--panel); border: 1px solid var(--accent); border-radius: 12px;
+    padding: 10px 12px; font-size: 12.5px; line-height: 1.45; color: var(--text);
+    max-width: 460px; margin: 0 auto; text-align: left;
+    /* Hard cap so the keypad below is never pushed off-screen. Internal
+       scroll lets the user read the full text even on small phones. */
+    max-height: 22vh; overflow-y: auto;
+  }
+  .coach .step { font-size: 11px; color: var(--accent); letter-spacing: 1px; text-transform: uppercase; margin-bottom: 6px; }
+  .coach b { color: var(--accent); }
+
+  /* history */
+  .histtabs { display: flex; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; margin: 0 auto; }
+  .histtabs button {
+    background: var(--field); color: var(--muted); border: none; font-family: inherit;
+    font-size: 13px; font-weight: 600; padding: 10px 26px;
+  }
+  .histtabs button.on { background: var(--accent); color: #0d1117; }
+  .chartwrap {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    padding: 12px 8px 6px; max-width: 460px; width: 100%; margin: 0 auto;
+  }
+  .chart-title { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin: 0 6px 4px; text-align: left; }
+  .histlist { max-width: 460px; width: 100%; margin: 0 auto; max-height: 38vh; overflow-y: auto; }
+  .histrow {
+    display: flex; justify-content: space-between; align-items: baseline;
+    padding: 10px 6px; border-bottom: 1px solid var(--border); font-size: 13px;
+  }
+  .histrow .when { color: var(--muted); font-size: 12px; }
+  .histrow .main { font-weight: 700; }
+  .histrow .detail { color: var(--muted); font-size: 11px; }
+  .empty { color: var(--muted); font-size: 13px; padding: 24px; }
+</style>
+</head>
+<body>
+
+<!-- ============ GAME ============ -->
+<div id="app" class="hidden">
+  <div class="topbar">
+    <div class="timer" id="timer">2:00</div>
+    <div class="score" id="scoreLine"></div>
+    <button class="gear" id="toSettings">&#9881;</button>
+  </div>
+
+  <div class="card">
+    <div class="prompt-label" id="promptLabel"></div>
+    <div class="eq" id="equation"></div>
+    <div class="answer" id="answer">&nbsp;</div>
+    <div class="quote hidden" id="quote">
+      <div class="qbox bid" id="bidBox"><div class="ql">Your Bid</div><div class="qv" id="bidVal">&nbsp;</div></div>
+      <div class="qbox ask" id="askBox"><div class="ql">Your Ask</div><div class="qv" id="askVal">&nbsp;</div></div>
+    </div>
+    <div class="verdict hidden" id="verdict">&nbsp;</div>
+  </div>
+
+  <!-- coach bubble appears here during the tutorial -->
+  <div class="coach hidden" id="coach"></div>
+
+  <div class="keypad" id="keypad"></div>
+</div>
+
+<!-- ============ START ============ -->
+<div class="overlay" id="startScreen">
+  <h1 id="startTitle">Trader Drill</h1>
+  <div class="modeswitch" id="modeSwitch">
+    <button data-v="parity">Parity</button>
+    <button data-v="mm">MM</button>
+    <button data-v="pnl">P&amp;L</button>
+  </div>
+  <div class="sub" id="startSub"></div>
+  <button class="btn" id="startBtn">Start</button>
+  <div class="rowbtns">
+    <button class="btn ghost sm" id="startTutorial">Walkthrough</button>
+    <button class="btn ghost sm" id="startHelp">Help</button>
+    <button class="btn ghost sm" id="startHistory">History</button>
+    <button class="btn ghost sm" id="startSettings">Settings</button>
+  </div>
+</div>
+
+<!-- ============ END ============ -->
+<div class="overlay hidden" id="endScreen">
+  <h1>Time</h1>
+  <div class="big" id="finalScore">0</div>
+  <div class="stats" id="endStats"></div>
+  <div class="sub" id="endRate"></div>
+  <div class="rowbtns">
+    <button class="btn" id="againBtn">Again</button>
+    <button class="btn ghost sm" id="endHistory">History</button>
+    <button class="btn ghost sm" id="endSettings">Settings</button>
+  </div>
+</div>
+
+<!-- ============ SETTINGS ============ -->
+<div class="overlay hidden" id="settingsScreen">
+  <h1>Settings</h1>
+  <div class="panel-scroll">
+    <div class="setgroup-label">Shared</div>
+    <div class="setrow">
+      <div class="lbl"><div class="t">Session length</div><div class="d">seconds</div></div>
+      <input class="numfield" id="setDuration" type="number" inputmode="numeric" min="30" max="600">
+    </div>
+    <div class="setrow">
+      <div class="lbl"><div class="t">Strike spacing</div><div class="d">round / messier</div></div>
+      <div class="seg" id="segStrike">
+        <button data-v="round">Round</button><button data-v="fine">Fine</button>
+      </div>
+    </div>
+
+    <div class="setgroup-label">Parity mode</div>
+    <div class="setrow">
+      <div class="lbl"><div class="t">Parity model</div><div class="d">straddle + r/c, or simple C&minus;P=S&minus;K</div></div>
+      <div class="seg" id="segParityModel">
+        <button data-v="real">Real</button><button data-v="simple">Simple</button>
+      </div>
+    </div>
+    <div class="setrow" id="rowSimpleDecimals">
+      <div class="lbl"><div class="t">Simple decimals</div><div class="d">cent-level ticks in Simple mode</div></div>
+      <div class="seg" id="segSimpleDecimals">
+        <button data-v="off">Off</button><button data-v="on">On</button>
+      </div>
+    </div>
+    <div class="setrow">
+      <div class="lbl"><div class="t">Unknown</div><div class="d">which leg you solve for</div></div>
+      <div class="seg" id="segUnknown">
+        <button data-v="random">Rnd</button><button data-v="C">C</button>
+        <button data-v="P">P</button><button data-v="S">S</button>
+        <button data-v="straddle">Strad</button><button data-v="rc">r/c</button>
+      </div>
+    </div>
+    <div class="setrow" id="rowDiscount">
+      <div class="lbl"><div class="t">Discounting (simple)</div><div class="d">C&minus;P = S &minus; K&middot;e^(&minus;rT)</div></div>
+      <div class="seg" id="segDiscount">
+        <button data-v="off">Off</button><button data-v="on">On</button>
+      </div>
+    </div>
+
+    <div class="setgroup-label">Market making mode</div>
+    <div class="setrow">
+      <div class="lbl"><div class="t">Instrument</div><div class="d">what you quote on</div></div>
+      <div class="seg" id="segInstr">
+        <button data-v="parity">Parity</button><button data-v="abstract">Abstract</button>
+      </div>
+    </div>
+    <div class="setrow">
+      <div class="lbl"><div class="t">Spread target</div><div class="d">max acceptable width</div></div>
+      <div class="seg" id="segWidth">
+        <button data-v="tight">Tight &le;2</button><button data-v="medium">Med &le;4</button>
+      </div>
+    </div>
+    <div class="setrow">
+      <div class="lbl"><div class="t">Quote timer</div><div class="d">per-round vs session</div></div>
+      <div class="seg" id="segMMTimer">
+        <button data-v="round">Per-round</button><button data-v="session">Session</button>
+      </div>
+    </div>
+    <div class="setrow" id="rowRoundSecs">
+      <div class="lbl"><div class="t">Seconds per quote</div><div class="d">per-round timer only</div></div>
+      <input class="numfield" id="setRoundSecs" type="number" inputmode="numeric" min="3" max="30">
+    </div>
+    <div class="setrow">
+      <div class="lbl"><div class="t">Pick-off detection</div><div class="d">penalise quotes through fair</div></div>
+      <div class="seg" id="segPickoff">
+        <button data-v="on">On</button><button data-v="off">Off</button>
+      </div>
+    </div>
+    <div class="setrow">
+      <div class="lbl"><div class="t">Show size</div><div class="d">each round requests a size; spread target scales with it</div></div>
+      <div class="seg" id="segShowSize">
+        <button data-v="off">Off</button><button data-v="on">On</button>
+      </div>
+    </div>
+    <div class="setrow" id="rowSizeRange">
+      <div class="lbl"><div class="t">Size range</div><div class="d">requested size distribution</div></div>
+      <div class="seg" id="segSizeRange">
+        <button data-v="small">1&ndash;10</button>
+        <button data-v="medium">10&ndash;200</button>
+        <button data-v="large">100&ndash;2k</button>
+        <button data-v="mixed">Mixed</button>
+      </div>
+    </div>
+
+    <div class="setgroup-label">P&amp;L mode</div>
+    <div class="setrow">
+      <div class="lbl"><div class="t">Quantity</div><div class="d">contracts per position</div></div>
+      <div class="seg" id="segPnlQty">
+        <button data-v="single">1</button>
+        <button data-v="small">2&ndash;10</button>
+        <button data-v="large">10&ndash;100</button>
+      </div>
+    </div>
+    <div class="setrow">
+      <div class="lbl"><div class="t">Contract multiplier</div><div class="d">e.g. 100 for US equity options</div></div>
+      <div class="seg" id="segPnlMult">
+        <button data-v="off">Off</button><button data-v="on">On</button>
+      </div>
+    </div>
+    <div class="setrow" id="rowPnlMultValue">
+      <div class="lbl"><div class="t">Multiplier value</div><div class="d">when multiplier is on</div></div>
+      <input class="numfield" id="setPnlMultValue" type="number" inputmode="numeric" min="1" max="10000">
+    </div>
+
+    <div class="setgroup-label">Data</div>
+    <div class="setrow">
+      <div class="lbl"><div class="t">Score history</div><div class="d" id="histCount">0 sessions stored</div></div>
+      <div class="rowbtns" style="justify-content:flex-end">
+        <button class="btn ghost sm" id="exportBtn">Export</button>
+        <button class="btn ghost sm" id="clearBtn">Clear</button>
+      </div>
+    </div>
+  </div>
+  <button class="btn" id="settingsDone">Done</button>
+</div>
+
+<!-- ============ HISTORY ============ -->
+<div class="overlay hidden" id="historyScreen">
+  <h1>History</h1>
+  <div class="histtabs" id="histTabs">
+    <button data-v="parity">Parity</button>
+    <button data-v="mm">MM</button>
+    <button data-v="pnl">P&amp;L</button>
+  </div>
+  <div class="chartwrap" id="chartWrap">
+    <div class="chart-title" id="chartTitle"></div>
+    <canvas id="histChart" width="440" height="160" style="width:100%;height:160px"></canvas>
+  </div>
+  <div class="histlist" id="histList"></div>
+  <button class="btn" id="historyDone">Done</button>
+</div>
+
+<!-- ============ HELP ============ -->
+<div class="overlay hidden" id="helpScreen">
+  <h1>Help</h1>
+  <div class="panel-scroll" style="text-align:left; font-size:13.5px; line-height:1.55; max-height:70vh; overflow-y:auto;">
+
+    <div class="setgroup-label">Parity</div>
+    <p style="margin-bottom:10px">
+      Solve a leg of put-call parity. Two models, set in Settings &gt; Parity model.
+    </p>
+    <p style="margin-bottom:10px"><b>Real model (default)</b> &mdash; matches the parity-zetamac trainer. Two identities are pinned each round:
+    <br>&nbsp;&nbsp;<span style="color:var(--accent)">C + P = straddle</span>
+    <br>&nbsp;&nbsp;<span style="color:var(--accent)">C &minus; P = S &minus; K + r/c</span>
+    <br>where <b>r/c</b> is a small signed carry term (interest minus dividends, times time). Compute <b>C&minus;P</b> from S&minus;K+r/c, then add or subtract the straddle and halve. Random leg blanked each round &mdash; can include the straddle or r/c itself.
+    </p>
+    <p style="margin-bottom:14px"><b>Simple model</b> &mdash; zero-rate <span style="color:var(--accent)">C &minus; P = S &minus; K</span>. Easier per round but trains the same sign-flip reflex. Optional discounting toggle adds an explicit factor <i>e<sup>&minus;rT</sup></i>.</p>
+
+    <div class="setgroup-label">Market Making</div>
+    <p style="margin-bottom:10px">
+      You are shown a fair value (or enough to compute one via parity); quote a two-sided market by entering bid then ask. Each quote scores 0&ndash;100:
+    </p>
+    <ul style="margin:0 0 10px 18px">
+      <li><b>Width score:</b> tighter is better, up to the spread target (Tight = 2, Medium = 4).</li>
+      <li><b>Centre score:</b> mid (B+A)/2 should equal fair; falls off as mid drifts.</li>
+      <li><b>Pick-off:</b> bidding above fair or offering below fair is instant zero. The rule that gives the drill its tension &mdash; you cannot just collapse the spread to zero.</li>
+    </ul>
+    <p style="margin-bottom:14px">
+      <b>Show size</b> toggle adds a requested-size line each round. The effective target widens with size as <i>t<sub>eff</sub> = t &times; (1 + log<sub>10</sub>(size))</i>, and width scoring becomes <i>symmetric</i> around it: quoting too tight on a 500-lot trade is now a fail, not a win. Pick-off still trumps everything.
+    </p>
+
+    <div class="setgroup-label">Position P&amp;L</div>
+    <p style="margin-bottom:10px">
+      A single-leg position at expiry. Given side (long/short), instrument (call/put), strike K, premium p, and terminal stock S<sub>T</sub>, compute total P&amp;L:
+    </p>
+    <ul style="margin:0 0 10px 18px;color:var(--muted)">
+      <li>Long call: max(S<sub>T</sub>&minus;K, 0) &minus; p</li>
+      <li>Long put: max(K&minus;S<sub>T</sub>, 0) &minus; p</li>
+      <li>Short call: p &minus; max(S<sub>T</sub>&minus;K, 0)</li>
+      <li>Short put: p &minus; max(K&minus;S<sub>T</sub>, 0)</li>
+    </ul>
+    <p style="margin-bottom:14px">
+      Multiply by quantity and, if the multiplier toggle is on, by the contract multiplier (100 default for equity options). The drill mixes all four side&times;instrument combinations and a mix of ITM/OTM/near-money outcomes so you cannot pattern-match. The sign on the short premium is the most common error: <i>short</i> means you <i>receive</i> premium but pay out the intrinsic, so a short call on an ITM expiry is negative.
+    </p>
+
+    <div class="setgroup-label">Strike spacing setting</div>
+    <p style="margin-bottom:14px">
+      <b>Round:</b> strikes step on multiples of 5 (with small cent offsets in Simple mode). <b>Fine:</b> strikes can land anywhere near spot. Subtle difficulty knob &mdash; Round is closer to a real strike ladder, Fine adds extra mental load. If unsure, leave on Round.
+    </p>
+
+    <div class="setgroup-label">History</div>
+    <p style="margin-bottom:14px">
+      Every finished session is saved per-mode with a trend chart. The dashed yellow line is a least-squares fit through the points &mdash; the slope tells you whether you are actually improving, more reliably than any single session. Stable around 15&plus; per session is a stronger SIG-prep signal than one lucky run at 25.
+    </p>
+
+    <div class="setgroup-label">Tutorial vs Help</div>
+    <p>
+      <b>Walkthrough</b> is the interactive one-time guided tour &mdash; one parity round, one MM quote (with and without size), one P&amp;L. <b>Help</b> (this page) is the reference: tap any time.
+    </p>
+  </div>
+  <button class="btn" id="helpDone">Done</button>
+</div>
+
+<script>
+"use strict";
+/* ============================================================
+   TRADER DRILL — parity + market-making drill, tutorial,
+   persistent per-mode score history with trend charts.
+   Single-file logic; manifest + service worker make it an
+   installable PWA when served over http(s).
+   ============================================================ */
+
+/* ---- service worker registration (no-op from file://) ---- */
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("sw.js").catch(() => {/* file:// — ignored */});
+  });
+}
+
+/* ---- persisted settings ---- */
+const DEFAULTS = {
+  mode: "parity", duration: 120, strike: "round",
+  // parity:
+  parityModel: "real",      // "real" = straddle + r/c (the original);
+                            // "simple" = C-P = S-K (zero-rate)
+  simpleDecimals: "on",     // "on" = cent-level ticks in Simple mode; "off" = whole numbers
+  unknown: "random",        // "random" | "C" | "P" | "S" | "straddle" | "rc"
+  discount: "off",          // legacy "simple" mode discount toggle
+  // market making:
+  instrument: "parity", width: "tight", mmTimer: "round", roundSecs: 8, pickoff: "on",
+  showSize: "off",          // "on" = each MM round shows a requested size
+  sizeRange: "mixed",       // "small" 1-10 | "medium" 10-200 | "large" 100-2000 | "mixed"
+  // P&L:
+  pnlMultiplier: "off",     // "off" (per-contract) | "on" (× M)
+  pnlMultValue: 100,        // multiplier when on
+  pnlQuantity: "single",    // "single" (Q=1) | "small" (Q in 1-10) | "large" (Q in 10-100)
+  tutorialDone: false
+};
+let cfg;
+try { cfg = Object.assign({}, DEFAULTS, JSON.parse(localStorage.getItem("traderDrillCfg") || "{}")); }
+catch (e) { cfg = Object.assign({}, DEFAULTS); }
+function saveCfg() { try { localStorage.setItem("traderDrillCfg", JSON.stringify(cfg)); } catch (e) {} }
+
+/* ---- persisted history ----
+   Array of { ts, mode, ...modeStats }. "Keep forever" with a hard
+   safety cap so a full localStorage never silently drops a save. */
+const HIST_KEY = "traderDrillHist";
+const HIST_CAP = 800;
+let history;
+try { history = JSON.parse(localStorage.getItem(HIST_KEY) || "[]"); }
+catch (e) { history = []; }
+if (!Array.isArray(history)) history = [];
+
+function saveHistory() {
+  if (history.length > HIST_CAP) history = history.slice(history.length - HIST_CAP);
+  try { localStorage.setItem(HIST_KEY, JSON.stringify(history)); }
+  catch (e) {
+    // storage full: trim aggressively and retry once
+    history = history.slice(Math.floor(history.length / 2));
+    try { localStorage.setItem(HIST_KEY, JSON.stringify(history)); } catch (e2) {}
+  }
+}
+function recordSession(rec) {
+  rec.ts = Date.now();
+  history.push(rec);
+  saveHistory();
+}
+
+/* ---- helpers ---- */
+const $ = id => document.getElementById(id);
+const randInt = (lo, hi) => lo + Math.floor(Math.random() * (hi - lo + 1));
+const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+const clamp = (x, lo, hi) => Math.min(hi, Math.max(lo, x));
+function fmt(x) { return (Math.round(x * 100) / 100).toString(); }
+
+/* ---- session state ---- */
+let round = null;
+let entry = "";
+let mmStage = "bid";
+let mmBid = null, mmAsk = null;
+let endTime = 0, tickHandle = null, running = false;
+let roundDeadline = 0;
+let solved = 0, attempts = 0, streak = 0, bestStreak = 0;
+let mmScoreSum = 0, mmPickoffs = 0, mmMissed = 0;
+
+/* ---- tutorial state ---- */
+let tutorial = false;     // is a guided walkthrough in progress
+// tutPhase is declared with the tutorial functions further down
+
+const KEY_NAME = { C: "Call", P: "Put", S: "Stock", K: "Strike",
+                   straddle: "Straddle", rc: "r/c" };
+const WIDTH_TARGET = { tight: 2, medium: 4 };
+
+/* ============================================================
+   PARITY ENGINES  (shared by parity mode and MM-on-parity)
+
+   REAL model (the parity-zetamac original):
+     C + P = straddle
+     C - P = S - K + (r/c)
+   We pick S, K, r/c freely; pick a straddle large enough that
+   both legs stay non-negative; derive C and P from the two
+   linear equations. r/c is a small signed carry term.
+
+   SIMPLE model (legacy zero-rate, optional discount):
+     C - P = S - K * df,  df = e^{-rT} (or 1 when off)
+   ============================================================ */
+function buildParityRowReal() {
+  // small/mid prices like the screenshot's 14-15 area, then scaled
+  const S = randInt(10, 200) + pick([0, 0.25, 0.5, 0.75]);
+  let K;
+  if (cfg.strike === "round") {
+    const base = Math.round(S / 5) * 5;
+    K = Math.max(5, base + pick([-10, -5, 0, 5, 10]));
+  } else {
+    K = Math.max(5, Math.round(S) + randInt(-10, 10));
+  }
+  // r/c: small signed carry term, two decimals, can be negative
+  const rc = (randInt(-50, 50)) / 100;
+  // C - P = S - K + rc
+  const cmp = +(S - K + rc).toFixed(2);
+  // pick a straddle big enough that both legs land >= 0:
+  //   C = (straddle + cmp)/2  >= 0 => straddle >= -cmp
+  //   P = (straddle - cmp)/2  >= 0 => straddle >=  cmp
+  const floorStraddle = Math.abs(cmp);
+  // straddle in roughly the range you'd see for ATM-ish names:
+  // floor plus a "time value" cushion of 1-12
+  const straddle = +(floorStraddle + (randInt(100, 1200) / 100)).toFixed(2);
+  const C = +((straddle + cmp) / 2).toFixed(2);
+  const P = +((straddle - cmp) / 2).toFixed(2);
+  return { kind: "real", S, K, rc, straddle, C, P };
+}
+
+function buildParityRowSimple(forceZeroRate) {
+  let df = 1;
+  if (!forceZeroRate && cfg.discount === "on") {
+    const r = randInt(1, 5) / 100;
+    const T = pick([0.25, 0.5, 0.75, 1]);
+    df = Math.round(Math.exp(-r * T) * 1000) / 1000;
+  }
+  // Decimal ticks toggle: when off, legs are whole-number arithmetic only.
+  // MM always uses simple+zero-rate without decimals (forceZeroRate from MM).
+  const useDecimals = !forceZeroRate && cfg.simpleDecimals === "on";
+  const tickSet = useDecimals ? [0, 0.25, 0.5, 0.75] : [0];
+  const S = randInt(50, 200) + pick(tickSet);
+  let K;
+  if (cfg.strike === "round") {
+    const base = Math.round(S / 5) * 5;
+    K = Math.max(20, base + pick([-15, -10, -5, 0, 5, 10, 15]));
+    K = +(K + pick(tickSet)).toFixed(2);
+  } else {
+    K = Math.max(20, Math.round(S) + randInt(-18, 18));
+    K = +(K + pick(tickSet)).toFixed(2);
+  }
+  const spread = S - K * df;
+  const floorP = Math.max(0, Math.ceil(-spread));
+  const P = +(floorP + randInt(1, 25) + pick(tickSet)).toFixed(2);
+  const C = +(P + spread).toFixed(2);
+  return { kind: "simple", S: +S.toFixed(2), K, C, P, df };
+}
+
+// Unified entry; MM mode always uses zero-rate simple.
+function buildParityRow(forceSimpleZeroRate) {
+  if (forceSimpleZeroRate) return buildParityRowSimple(true);
+  return cfg.parityModel === "real" ? buildParityRowReal() : buildParityRowSimple(false);
+}
+
+/* ============================================================
+   PARITY MODE
+   ============================================================ */
+// Valid target legs depending on the row model
+const REAL_LEGS = ["C", "P", "S", "straddle", "rc"];
+const SIMPLE_LEGS = ["C", "P", "S"];
+const LEG_LABEL = { C: "Call", P: "Put", S: "Stock", K: "Strike",
+                    straddle: "Straddle", rc: "r/c" };
+const LEG_SHORT = { C: "C", P: "P", S: "S", K: "K",
+                    straddle: "Straddle", rc: "r/c" };
+
+function buildParityRound() {
+  const row = buildParityRow();
+  const legs = row.kind === "real" ? REAL_LEGS : SIMPLE_LEGS;
+  let target = cfg.unknown;
+  if (target === "random" || legs.indexOf(target) < 0) target = pick(legs);
+  return Object.assign(row, { target });
+}
+
+// Renders the row of tokens. For "real" rows the layout matches the
+// original trainer screenshot: each token on its own line as a leg.
+function renderParityRow(r, targetKey) {
+  $("promptLabel").textContent = "Solve for the " +
+    (LEG_LABEL[targetKey] || "leg").toLowerCase();
+
+  let legs;
+  if (r.kind === "real") {
+    legs = [
+      { k: "straddle", label: "Straddle", val: r.straddle },
+      { k: "rc",       label: "r/c",      val: r.rc },
+      { k: "S",        label: "S",        val: r.S },
+      { k: "K",        label: "K",        val: r.K }
+    ];
+    // when the user is solving for C or P, also show the OTHER one
+    // (the original trainer never reveals both, so don't either);
+    // when solving for S or rc, show the call AND put.
+    if (targetKey === "S" || targetKey === "rc") {
+      legs.unshift({ k: "P", label: "Put",  val: r.P });
+      legs.unshift({ k: "C", label: "Call", val: r.C });
+      legs = legs.filter(l => l.k !== "straddle"); // straddle redundant if C,P shown
+    }
+    if (targetKey === "straddle") {
+      // need both legs to compute straddle
+      legs.unshift({ k: "P", label: "Put",  val: r.P });
+      legs.unshift({ k: "C", label: "Call", val: r.C });
+      legs = legs.filter(l => l.k !== "straddle");
+    }
+  } else {
+    legs = [
+      { k: "C", label: "Call",   val: r.C },
+      { k: "P", label: "Put",    val: r.P },
+      { k: "S", label: "Stock",  val: r.S },
+      { k: "K", label: "Strike", val: r.K }
+    ];
+  }
+
+  const eq = $("equation");
+  eq.innerHTML = "";
+  // Real rows render vertically (like the screenshot), simple rows
+  // render in a row of tokens separated by dots.
+  if (r.kind === "real") {
+    eq.style.flexDirection = "column";
+    eq.style.gap = "6px";
+    legs.forEach(leg => {
+      const isT = leg.k === targetKey;
+      const t = document.createElement("div");
+      t.style.fontSize = "20px";
+      t.style.fontWeight = "600";
+      t.style.color = isT ? "var(--accent)" : "var(--text)";
+      const valTxt = isT ? "?" : fmtVal(leg.k, leg.val);
+      t.textContent = leg.label + " = " + valTxt;
+      eq.appendChild(t);
+    });
+  } else {
+    eq.style.flexDirection = "row";
+    eq.style.gap = "8px 10px";
+    legs.forEach((leg, i) => {
+      const isT = leg.k === targetKey;
+      const t = document.createElement("div");
+      t.className = "tok" + (isT ? " target" : "");
+      t.innerHTML = '<span class="v">' + (isT ? "?" : fmtVal(leg.k, leg.val)) +
+                    '</span><span class="k">' + leg.label + '</span>';
+      eq.appendChild(t);
+      if (i < legs.length - 1) {
+        const op = document.createElement("span");
+        op.className = "op"; op.textContent = "·";
+        eq.appendChild(op);
+      }
+    });
+    if (r.df !== undefined && r.df !== 1) {
+      const op = document.createElement("span");
+      op.className = "op"; op.textContent = "DF";
+      eq.appendChild(op);
+      const t = document.createElement("div");
+      t.className = "tok";
+      t.innerHTML = '<span class="v">' + r.df + '</span><span class="k">e^(-rT)</span>';
+      eq.appendChild(t);
+    }
+  }
+}
+
+// r/c can be small/negative — preserve sign + 2dp; otherwise standard fmt.
+function fmtVal(key, v) {
+  if (key === "rc") {
+    const s = (Math.round(v * 100) / 100).toFixed(2);
+    return v >= 0 ? s : s; // toFixed already keeps the minus
+  }
+  return fmt(v);
+}
+
+function renderParity() {
+  renderParityRow(round, round.target);
+  entry = "";
+  $("answer").textContent = "\u00A0";
+  $("answer").className = "answer";
+}
+
+function checkParity() {
+  if (entry === "" || entry === "-" || entry === ".") return;
+  if (tutorial) return checkTutorialParity();
+  attempts++;
+  const guess = parseFloat(entry);
+  const correct = Math.round(round[round.target] * 100) / 100;
+  // r/c values are small (~±0.5); use a slightly larger absolute tolerance
+  // so the user can ignore a trailing-zero edge case. Everything else is ±0.011.
+  const tol = round.target === "rc" ? 0.005 : 0.011;
+  const ok = Math.abs(guess - correct) < tol;
+  const box = $("answer");
+  if (ok) {
+    solved++; streak++; bestStreak = Math.max(bestStreak, streak);
+    box.className = "answer flash-good";
+    if (navigator.vibrate) navigator.vibrate(15);
+  } else {
+    streak = 0;
+    box.className = "answer flash-bad";
+    box.textContent = fmtVal(round.target, correct);
+    if (navigator.vibrate) navigator.vibrate([0, 40, 30, 40]);
+  }
+  refreshScore();
+  lockThenNext(ok ? 90 : 650);
+}
+
+/* ============================================================
+   MARKET-MAKING MODE
+   ============================================================ */
+/* Size tiering: the effective acceptable spread grows with requested size.
+   Log scaling matches the textbook market-impact functional form (sublinear
+   in size) — real liquidity premium scales roughly with sqrt or log, not
+   linearly. Formula:  t_eff = t_base * (1 + log10(max(size, 1)))
+     size=1   -> ~1.0 * base   (no widening)
+     size=10  -> ~2.0 * base
+     size=100 -> ~3.0 * base
+     size=1000-> ~4.0 * base
+   The pick-off rule stays unchanged: through-fair is always zero. */
+function effectiveTarget(baseTarget, size) {
+  if (!size || size <= 1) return baseTarget;
+  return baseTarget * (1 + Math.log10(size));
+}
+
+function pickRequestedSize() {
+  let lo, hi;
+  switch (cfg.sizeRange) {
+    case "small":  lo = 1;   hi = 10;   break;
+    case "medium": lo = 10;  hi = 200;  break;
+    case "large":  lo = 100; hi = 2000; break;
+    default:       // mixed: weight smaller sizes more heavily to keep the
+                   // drill mostly tight-quoting, with occasional fat trades
+      const r = Math.random();
+      if (r < 0.45)      { lo = 1;   hi = 10;   }
+      else if (r < 0.80) { lo = 10;  hi = 200;  }
+      else               { lo = 100; hi = 2000; }
+  }
+  // round to a "human" size: 1s under 10, 5s under 50, 10s under 500, 50s above
+  const raw = randInt(lo, hi);
+  if (raw < 10)  return raw;
+  if (raw < 50)  return Math.round(raw / 5) * 5;
+  if (raw < 500) return Math.round(raw / 10) * 10;
+  return Math.round(raw / 50) * 50;
+}
+
+function buildMMRound() {
+  let r;
+  if (cfg.instrument === "parity") {
+    const row = buildParityRow(true);          // MM parity instruments stay zero-rate
+    const target = pick(["C", "P", "S"]);
+    const fair = Math.round(row[target] * 100) / 100;
+    r = { kind: "parity", row, target, fair };
+  } else {
+    const fair = Math.random() < 0.4
+      ? randInt(40, 400) + pick([0.5, 0.25, 0.75])
+      : randInt(40, 400);
+    r = { kind: "abstract", fair };
+  }
+  // Tag a requested size if size mode is on (0 = no size, i.e. base behaviour)
+  r.size = cfg.showSize === "on" ? pickRequestedSize() : 0;
+  return r;
+}
+
+function renderMM() {
+  const r = round;
+  if (r.kind === "parity") {
+    renderParityRow(r.row, r.target);
+    $("promptLabel").textContent = "Quote a market on the " + KEY_NAME[r.target].toLowerCase();
+  } else {
+    $("promptLabel").textContent = "Quote a two-sided market";
+    const eq = $("equation");
+    eq.innerHTML = "";
+    eq.style.flexDirection = "column";
+    eq.style.gap = "6px";
+    const t = document.createElement("div");
+    t.className = "tok target";
+    t.style.fontSize = "22px";
+    t.innerHTML = '<span class="v">' + fmt(r.fair) + '</span> <span class="k">Fair</span>';
+    eq.appendChild(t);
+  }
+  // Size pill: appended for both abstract and parity instruments
+  if (r.size && r.size > 0) {
+    const eq = $("equation");
+    const s = document.createElement("div");
+    s.style.fontSize = "16px";
+    s.style.color = "var(--warn)";
+    s.style.marginTop = "4px";
+    s.style.fontWeight = "600";
+    s.textContent = "Requested size: " + r.size + " lot" + (r.size === 1 ? "" : "s");
+    eq.appendChild(s);
+  }
+  entry = ""; mmBid = null; mmAsk = null; mmStage = "bid";
+  $("bidVal").textContent = "\u00A0";
+  $("askVal").textContent = "\u00A0";
+  $("bidBox").className = "qbox bid active";
+  $("askBox").className = "qbox ask";
+  $("verdict").textContent = "\u00A0";
+  $("verdict").className = "verdict";
+  if (!tutorial && cfg.mmTimer === "round") roundDeadline = Date.now() + cfg.roundSecs * 1000;
+}
+
+function mmEnter() {
+  if (entry === "" || entry === "." || entry === "-") return;
+  const v = parseFloat(entry);
+  if (mmStage === "bid") {
+    mmBid = v;
+    $("bidVal").textContent = fmt(v);
+    mmStage = "ask"; entry = "";
+    $("bidBox").className = "qbox bid";
+    $("askBox").className = "qbox ask active";
+    $("askVal").textContent = "\u00A0";
+    if (tutorial) {
+      if (tutPhase === "mm-bid") tutorialAfterBid();
+      else if (tutPhase === "mm-size-bid") tutorialAfterSizeBid();
+    }
+  } else {
+    mmAsk = v;
+    $("askVal").textContent = fmt(v);
+    if (tutorial) {
+      if (tutPhase === "mm-ask") return checkTutorialQuote();
+      if (tutPhase === "mm-size-ask") return checkTutorialSizeQuote();
+    }
+    scoreMM();
+  }
+}
+
+/* MM scoring — see header comment for the formula rationale.
+   widthCfg is the *base* target name ("tight"|"medium"); size lets the
+   caller widen the acceptable spread for larger requested sizes.
+
+   Width score:
+     - In size-free mode (or size <= 1): tighter is always better, peaking
+       at the target.  width <= target -> 100; decays to 0 at 3*target.
+     - When size > 1: the score peaks AT the effective target and falls
+       off in BOTH directions. Too tight gets you picked off; too wide
+       loses flow. This is the lesson — you cannot just quote infinitely
+       tight on a 500-lot trade.                                            */
+function evalQuote(B, A, F, widthCfg, pickoffOn, size) {
+  const width = A - B, mid = (A + B) / 2;
+  const baseTarget = WIDTH_TARGET[widthCfg];
+  const target = effectiveTarget(baseTarget, size || 0);
+  const pickedBid = B > F + 1e-9, pickedAsk = A < F - 1e-9, inverted = width <= 0;
+  if (inverted) return { score: 0, why: "inverted" };
+  if (pickoffOn && (pickedBid || pickedAsk)) {
+    return { score: 0, why: "pickoff", side: pickedBid ? "bid" : "ask",
+             edge: pickedBid ? (B - F) : (F - A) };
+  }
+  let w;
+  if (size && size > 1) {
+    // Symmetric falloff around the size-scaled target — penalise too-tight
+    // markets as well as too-wide ones.
+    const dev = Math.abs(width - target) / target;
+    w = clamp(100 * (1 - dev), 0, 100);
+  } else {
+    // No size context — tighter is always better up to the target.
+    w = clamp(100 * (1 - (width - target) / (2 * target)), 0, 100);
+  }
+  const c = clamp(100 * (1 - Math.abs(mid - F) / target), 0, 100);
+  return { score: Math.round(0.5 * w + 0.5 * c), width, w, c, target };
+}
+
+function scoreMM() {
+  attempts++;
+  const F = round.fair;
+  const res = evalQuote(mmBid, mmAsk, F, cfg.width, cfg.pickoff === "on", round.size);
+  let vClass, vText;
+  if (res.why === "inverted") {
+    vClass = "bad"; vText = "Inverted market — ask \u2264 bid";
+  } else if (res.why === "pickoff") {
+    mmPickoffs++;
+    vClass = "bad";
+    vText = "Picked off — " + res.side + " " + fmt(Math.abs(res.edge)) +
+            " through fair " + fmt(F);
+  } else if (res.score >= 85) {
+    solved++; streak++; bestStreak = Math.max(bestStreak, streak);
+    vClass = "good";
+    vText = "Score " + res.score + " · width " + fmt(res.width) + " · fair " + fmt(F);
+  } else {
+    streak = 0;
+    vClass = "warn";
+    let note;
+    if (res.width > res.target * 1.2)      note = "too wide";
+    else if (round.size && round.size > 1 && res.width < res.target * 0.8)
+      note = "too tight for size " + round.size;
+    else                                    note = "off-centre";
+    vText = "Score " + res.score + " · " + note + " · fair " + fmt(F);
+  }
+  mmScoreSum += res.score;
+  $("verdict").textContent = vText;
+  $("verdict").className = "verdict " + vClass;
+  const good = res.score >= 85;
+  $("bidBox").className = "qbox bid " + (good ? "flash-good" : "flash-bad");
+  $("askBox").className = "qbox ask " + (good ? "flash-good" : "flash-bad");
+  if (navigator.vibrate) navigator.vibrate(good ? 15 : [0, 40, 30, 40]);
+  refreshScore();
+  lockThenNext(good ? 520 : 1000);
+}
+
+function mmTimeout() {
+  attempts++; mmMissed++; streak = 0;
+  $("verdict").textContent = "Missed — no market up. Fair was " + fmt(round.fair);
+  $("verdict").className = "verdict bad";
+  if (navigator.vibrate) navigator.vibrate([0, 60, 40, 60]);
+  refreshScore();
+  lockThenNext(1000);
+}
+
+/* ============================================================
+   POSITION P&L MODE — single-leg payoff at expiry.
+
+   Position:   side (long/short) × instrument (call/put) × qty
+   Per-contract P&L at expiry:
+       long  call:  max(S_T - K, 0) - premium
+       long  put:   max(K - S_T, 0) - premium
+       short call:  premium - max(S_T - K, 0)
+       short put:   premium - max(K - S_T, 0)
+
+   Total = qty × multiplier × per-contract P&L.
+
+   The drill deliberately mixes ITM and OTM expiries and all four
+   side×instrument combinations so you can't pattern-match.
+   ============================================================ */
+function buildPnlRound() {
+  const side = pick(["long", "short"]);
+  const instr = pick(["call", "put"]);
+  // Strike around 100, premium plausible for a near-the-money option
+  const K = randInt(80, 130);
+  const premium = randInt(150, 800) / 100;              // 1.50 - 8.00
+  // Terminal stock: deliberately mix ITM/OTM/at-money outcomes.
+  // For calls we want both S_T > K and S_T < K; same for puts (flipped).
+  // Bias roughly 60% interesting (clearly ITM or OTM by a margin), 40% near K.
+  let S_T;
+  const roll = Math.random();
+  if (roll < 0.3) S_T = K + randInt(3, 18);             // call ITM / put OTM
+  else if (roll < 0.6) S_T = K - randInt(3, 18);        // call OTM / put ITM
+  else S_T = K + randInt(-4, 4);                        // near the money
+
+  const intrinsic = instr === "call"
+    ? Math.max(S_T - K, 0)
+    : Math.max(K - S_T, 0);
+  const perContract = side === "long"
+    ? +(intrinsic - premium).toFixed(2)
+    : +(premium - intrinsic).toFixed(2);
+
+  // Quantity
+  let qty;
+  if (cfg.pnlQuantity === "single") qty = 1;
+  else if (cfg.pnlQuantity === "small") qty = randInt(2, 10);
+  else qty = randInt(10, 100);
+
+  const mult = cfg.pnlMultiplier === "on" ? cfg.pnlMultValue : 1;
+  const totalPnL = +(qty * mult * perContract).toFixed(2);
+
+  return { kind: "pnl", side, instr, K, premium, S_T,
+           qty, mult, intrinsic, perContract, totalPnL };
+}
+
+function renderPnl() {
+  const r = round;
+  const sideTxt  = r.side === "long" ? "Long" : "Short";
+  const instrTxt = r.instr === "call" ? "Call" : "Put";
+
+  $("promptLabel").textContent = "P&L at expiry";
+
+  // Vertical layout, like real parity rows
+  const eq = $("equation");
+  eq.innerHTML = "";
+  eq.style.flexDirection = "column";
+  eq.style.gap = "6px";
+
+  // Top line: the position description, prominent
+  const posLine = document.createElement("div");
+  posLine.style.fontSize = "22px";
+  posLine.style.fontWeight = "700";
+  posLine.style.color = "var(--accent)";
+  posLine.style.marginBottom = "4px";
+  const qtyTxt = r.qty === 1 ? "" : (r.qty + " × ");
+  posLine.textContent = qtyTxt + sideTxt + " " + instrTxt;
+  eq.appendChild(posLine);
+
+  const rows = [
+    ["Strike",         r.K.toString()],
+    ["Premium",        fmt(r.premium)],
+    ["Terminal S",     fmt(r.S_T)]
+  ];
+  if (r.mult !== 1) rows.push(["Multiplier", r.mult.toString()]);
+  rows.forEach(([k, v]) => {
+    const row = document.createElement("div");
+    row.style.fontSize = "18px";
+    row.style.fontWeight = "600";
+    row.textContent = k + " = " + v;
+    eq.appendChild(row);
+  });
+
+  entry = "";
+  $("answer").textContent = "\u00A0";
+  $("answer").className = "answer";
+}
+
+function checkPnl() {
+  if (entry === "" || entry === "-" || entry === ".") return;
+  if (tutorial) return checkTutorialPnl();
+  attempts++;
+  const guess = parseFloat(entry);
+  const correct = round.totalPnL;
+  // Larger absolute tolerance only for large-multiplier P&Ls so a $0.50
+  // rounding doesn't penalise; for per-contract, hold the tight tolerance.
+  const tol = round.mult >= 100 ? 0.5 : 0.011;
+  const ok = Math.abs(guess - correct) < tol;
+  const box = $("answer");
+  if (ok) {
+    solved++; streak++; bestStreak = Math.max(bestStreak, streak);
+    box.className = "answer flash-good";
+    if (navigator.vibrate) navigator.vibrate(15);
+  } else {
+    streak = 0;
+    box.className = "answer flash-bad";
+    box.textContent = (correct >= 0 ? "+" : "") + fmt(correct);
+    if (navigator.vibrate) navigator.vibrate([0, 40, 30, 40]);
+  }
+  refreshScore();
+  lockThenNext(ok ? 90 : 800);
+}
+
+/* ============================================================
+   ROUND DISPATCH
+   ============================================================ */
+function nextRound() {
+  if (cfg.mode === "parity") { round = buildParityRound(); renderParity(); }
+  else if (cfg.mode === "pnl") { round = buildPnlRound(); renderPnl(); }
+  else { round = buildMMRound(); renderMM(); }
+}
+
+function lockThenNext(delayMs) {
+  running = false;
+  roundDeadline = 0;
+  setTimeout(() => {
+    if (endTime && Date.now() >= endTime) { endSession(); return; }
+    running = true;
+    nextRound();
+  }, delayMs);
+}
+
+function submit() {
+  if (!running) return;
+  if (cfg.mode === "parity") checkParity();
+  else if (cfg.mode === "pnl") checkPnl();
+  else mmEnter();
+}
+
+/* ============================================================
+   KEYPAD
+   ============================================================ */
+function buildKeypad() {
+  const kp = $("keypad");
+  kp.innerHTML = "";
+  ["1","2","3","4","5","6","7","8","9","-","0","."].forEach(ch => {
+    const b = document.createElement("button");
+    b.className = "key"; b.textContent = ch;
+    b.addEventListener("click", () => pressDigit(ch));
+    kp.appendChild(b);
+  });
+  // Use literal labels; some Safari/iOS font stacks don't render \u23CE / \u232B
+  const del = document.createElement("button");
+  del.className = "key del";
+  del.textContent = "Del";
+  del.style.fontSize = "18px";
+  del.addEventListener("click", backspace);
+  const ent = document.createElement("button");
+  ent.className = "key act";
+  ent.textContent = "Enter";
+  ent.style.fontSize = "18px";
+  ent.style.gridColumn = "span 2";
+  ent.addEventListener("click", submit);
+  kp.appendChild(del);
+  kp.appendChild(ent);
+}
+
+function pressDigit(ch) {
+  if (!running) return;
+  if (ch === "-") {
+    entry = entry.startsWith("-") ? entry.slice(1) : "-" + entry;
+  } else if (ch === ".") {
+    if (!entry.includes(".")) entry += (entry === "" || entry === "-") ? "0." : ".";
+  } else {
+    if (entry.replace(/[-.]/g, "").length < 7) entry += ch;
+  }
+  refreshEntry();
+}
+function backspace() {
+  if (!running) return;
+  entry = entry.slice(0, -1);
+  refreshEntry();
+}
+function refreshEntry() {
+  // parity and P&L both use the single answer box; MM uses dual bid/ask
+  if (cfg.mode === "mm") {
+    const el = mmStage === "bid" ? $("bidVal") : $("askVal");
+    el.textContent = entry === "" ? "\u00A0" : entry;
+  } else {
+    const a = $("answer");
+    a.className = "answer";
+    a.textContent = entry === "" ? "\u00A0" : entry;
+  }
+}
+document.addEventListener("keydown", e => {
+  if (!running) return;
+  if (e.key >= "0" && e.key <= "9") pressDigit(e.key);
+  else if (e.key === "." || e.key === "-") pressDigit(e.key);
+  else if (e.key === "Backspace") backspace();
+  else if (e.key === "Enter") submit();
+});
+
+/* ============================================================
+   TIMER / SESSION LIFECYCLE
+   ============================================================ */
+function fmtClock(s) {
+  s = Math.max(0, Math.ceil(s));
+  return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
+}
+function tick() {
+  const now = Date.now();
+  const left = (endTime - now) / 1000;
+  $("timer").textContent = fmtClock(left);
+  $("timer").classList.toggle("urgent", left <= 10);
+  if (running && cfg.mode === "mm" && cfg.mmTimer === "round" && roundDeadline) {
+    if (now >= roundDeadline) { roundDeadline = 0; mmTimeout(); }
+  }
+  if (left <= 0) { endSession(); return; }
+  tickHandle = requestAnimationFrame(tick);
+}
+function refreshScore() {
+  if (cfg.mode === "mm") {
+    const avg = attempts ? Math.round(mmScoreSum / attempts) : 0;
+    $("scoreLine").innerHTML = "avg <b>" + avg + "</b> &nbsp;·&nbsp; streak <b>" + streak + "</b>";
+  } else {
+    // parity and P&L share solve-count semantics
+    $("scoreLine").innerHTML = "streak <b>" + streak + "</b> &nbsp;·&nbsp; <b>" + solved + "</b> solved";
+  }
+}
+
+function showGameUI() {
+  const isMM = cfg.mode === "mm";
+  $("answer").classList.toggle("hidden", isMM);
+  $("quote").classList.toggle("hidden", !isMM);
+  $("verdict").classList.toggle("hidden", !isMM);
+  ["startScreen","endScreen","settingsScreen","historyScreen"].forEach(s => $(s).classList.add("hidden"));
+  $("app").classList.remove("hidden");
+}
+
+function startSession() {
+  tutorial = false;
+  $("coach").classList.add("hidden");
+  solved = attempts = streak = bestStreak = 0;
+  mmScoreSum = mmPickoffs = mmMissed = 0;
+  running = true;
+  endTime = Date.now() + cfg.duration * 1000;
+  showGameUI();
+  refreshScore();
+  nextRound();
+  cancelAnimationFrame(tickHandle);
+  tick();
+}
+
+function endSession() {
+  running = false;
+  cancelAnimationFrame(tickHandle);
+  const stats = $("endStats");
+  if (cfg.mode === "parity") {
+    const acc = attempts ? Math.round(100 * solved / attempts) : 0;
+    const rate = +(solved / (cfg.duration / 60)).toFixed(1);
+    $("finalScore").textContent = solved;
+    stats.innerHTML = statBlock(solved, "solved") + statBlock(acc + "%", "accuracy") +
+                      statBlock(bestStreak, "best streak");
+    $("endRate").textContent = rate + " solved / min";
+    recordSession({ mode: "parity", solved, attempts, accuracy: acc,
+                    bestStreak, rate, duration: cfg.duration });
+  } else if (cfg.mode === "pnl") {
+    const acc = attempts ? Math.round(100 * solved / attempts) : 0;
+    const rate = +(solved / (cfg.duration / 60)).toFixed(1);
+    $("finalScore").textContent = solved;
+    stats.innerHTML = statBlock(solved, "solved") + statBlock(acc + "%", "accuracy") +
+                      statBlock(bestStreak, "best streak");
+    $("endRate").textContent = rate + " solved / min";
+    recordSession({ mode: "pnl", solved, attempts, accuracy: acc,
+                    bestStreak, rate, duration: cfg.duration,
+                    multiplier: cfg.pnlMultiplier === "on" ? cfg.pnlMultValue : 1,
+                    quantity: cfg.pnlQuantity });
+  } else {
+    const avg = attempts ? Math.round(mmScoreSum / attempts) : 0;
+    $("finalScore").textContent = avg;
+    stats.innerHTML = statBlock(attempts, "quotes") + statBlock(mmPickoffs, "picked off") +
+                      statBlock(bestStreak, "best streak");
+    const extra = cfg.mmTimer === "round" ? (" · " + mmMissed + " missed") : "";
+    $("endRate").textContent = "avg score / quote" + extra;
+    recordSession({ mode: "mm", avgScore: avg, quotes: attempts, pickoffs: mmPickoffs,
+                    missed: mmMissed, bestStreak, instrument: cfg.instrument,
+                    width: cfg.width, duration: cfg.duration });
+  }
+  $("app").classList.add("hidden");
+  $("endScreen").classList.remove("hidden");
+}
+function statBlock(n, l) {
+  return '<div><span class="n">' + n + '</span><span class="l">' + l + '</span></div>';
+}
+
+/* ============================================================
+   TUTORIAL  —  guided once-only walkthrough.
+   Teaches the *real* parity model (straddle + r/c), then one MM
+   quote on an abstract fair value to explain the scoring.
+
+   Bug fixes vs previous tutorial:
+     * coach "Next" button is rebuilt as a fresh element each call
+       (avoids stacked listeners that could trigger the wrong step)
+     * tutorial state has its own substep counter (`tutPhase`) and
+       does not rely on the running/locked race window between rounds
+     * input dead-end after a wrong answer fully resets entry + box
+   ============================================================ */
+let tutPhase = "idle";   // "parity" | "parity-done" | "mm-bid" | "mm-ask" | "mm-done"
+
+function showCoach(html) {
+  const c = $("coach");
+  c.innerHTML = html;
+  c.classList.remove("hidden");
+}
+function clearCoach() { $("coach").classList.add("hidden"); }
+
+// fresh-button helper: removes any prior listeners by replacing the node
+function coachWithButton(html, label, fn) {
+  showCoach(html + '<div style="margin-top:12px;text-align:center">' +
+    '<button class="btn sm" id="coachNext">' + label + '</button></div>');
+  // newly inserted #coachNext has no listeners; bind once
+  $("coachNext").addEventListener("click", fn, { once: true });
+}
+
+function startTutorial() {
+  tutorial = true;
+  tutPhase = "parity";
+  running = false;
+  cancelAnimationFrame(tickHandle);
+
+  // tutorial uses the REAL model so the lesson matches what they'll drill
+  $("answer").classList.remove("hidden");
+  $("quote").classList.add("hidden");
+  $("verdict").classList.add("hidden");
+  ["startScreen","endScreen","settingsScreen","historyScreen"].forEach(s =>
+    $(s).classList.add("hidden"));
+  $("app").classList.remove("hidden");
+  $("timer").textContent = "—";
+  $("scoreLine").innerHTML = "<b>walkthrough</b>";
+
+  // Fixed parity row (matches the screenshot's numbers exactly so the user
+  // sees the same setup they showed me):
+  //   S=14.22, K=15, r/c=0.09, straddle=3.75 -> C=1.53, P=2.22; solve P.
+  round = { kind: "real", S: 14.22, K: 15, rc: 0.09, straddle: 3.75,
+            C: 1.53, P: 2.22, target: "P" };
+  renderParityRow(round, "P");
+  entry = "";
+  $("answer").textContent = "\u00A0";
+  $("answer").className = "answer";
+  running = true;
+
+  showCoach(
+    '<div class="step">Walkthrough 1 / 5</div>' +
+    'Real parity model. Two facts are given each round:<br>' +
+    '&nbsp;&nbsp;<b>C + P = straddle</b><br>' +
+    '&nbsp;&nbsp;<b>C &minus; P = S &minus; K + r/c</b><br><br>' +
+    'Here: <b>C &minus; P = 14.22 &minus; 15 + 0.09 = &minus;0.69</b>. ' +
+    'With straddle = 3.75, <b>P = (straddle &minus; (C&minus;P))/2 = (3.75 + 0.69)/2 = 2.22</b>. ' +
+    'Type <b>2.22</b> and hit return.'
+  );
+}
+
+function checkTutorialParity() {
+  if (tutPhase !== "parity") return;
+  if (entry === "" || entry === "-" || entry === ".") return;
+  const guess = parseFloat(entry);
+  const correct = 2.22;
+  const box = $("answer");
+  if (Math.abs(guess - correct) < 0.011) {
+    box.className = "answer flash-good";
+    if (navigator.vibrate) navigator.vibrate(15);
+    tutPhase = "parity-done";
+    running = false;
+    setTimeout(() => {
+      coachWithButton(
+        '<div class="step">Walkthrough 2 / 5</div>' +
+        'That is the whole loop. Compute <b>C &minus; P</b> from <b>S &minus; K + r/c</b>, ' +
+        'then half-sum or half-difference with the straddle to get the leg. ' +
+        'For C: <b>C = (straddle + (C&minus;P)) / 2</b>. ' +
+        'The drill randomises which leg is hidden. Tap Next.',
+        "Next", tutorialToMM);
+    }, 280);
+  } else {
+    box.className = "answer flash-bad";
+    showCoach(
+      '<div class="step">Walkthrough 1 / 5</div>' +
+      'Not quite — work it through: <b>C&minus;P = 14.22 &minus; 15 + 0.09 = &minus;0.69</b>. ' +
+      'Then <b>P = (3.75 &minus; (&minus;0.69))/2 = 4.44/2 = 2.22</b>. Try again.'
+    );
+    // hard reset the input so the user can immediately retype
+    entry = "";
+    setTimeout(() => {
+      box.className = "answer";
+      box.textContent = "\u00A0";
+    }, 600);
+  }
+}
+
+function tutorialToMM() {
+  tutPhase = "mm-bid";
+  $("answer").classList.add("hidden");
+  $("quote").classList.remove("hidden");
+  $("verdict").classList.remove("hidden");
+  round = { kind: "abstract", fair: 100 };
+  renderMM();
+  running = true;
+  showCoach(
+    '<div class="step">Walkthrough 3 / 5</div>' +
+    'Market making. Quote a two-sided market: <b>bid</b> (where you buy) below fair, ' +
+    '<b>ask</b> (where you sell) above. Fair here is <b>100</b>. ' +
+    'Enter bid <b>99</b> and hit return.'
+  );
+}
+
+function tutorialAfterBid() {
+  if (tutPhase !== "mm-bid") return;
+  tutPhase = "mm-ask";
+  showCoach(
+    '<div class="step">Walkthrough 3 / 5</div>' +
+    'Now the ask — must be above fair, or you sell too cheap (pick-off, instant zero). ' +
+    'Enter ask <b>101</b> and hit return.'
+  );
+}
+
+function checkTutorialQuote() {
+  if (tutPhase !== "mm-ask") return;
+  const res = evalQuote(mmBid, mmAsk, 100, "tight", true);
+  const good = res.score >= 85 && !res.why;
+  $("bidBox").className = "qbox bid " + (good ? "flash-good" : "flash-bad");
+  $("askBox").className = "qbox ask " + (good ? "flash-good" : "flash-bad");
+  if (good) {
+    $("verdict").textContent = "Score " + res.score + " — clean two-sided market.";
+    $("verdict").className = "verdict good";
+    tutPhase = "mm-done";
+    running = false;
+    setTimeout(() => {
+      coachWithButton(
+        '<div class="step">Walkthrough 3 / 5</div>' +
+        'Each quote scores 0&ndash;100: half on <b>width</b> (tighter wins, up to the ' +
+        'target), half on <b>centre</b> (mid vs fair). Through-fair quotes score zero. ' +
+        'Tap Next to see what changes when a counterparty asks for size.',
+        "Next", tutorialToMMSize);
+    }, 280);
+  } else {
+    let msg;
+    if (res.why === "inverted") msg = "Ask must be above the bid — try 99 / 101.";
+    else if (res.why === "pickoff")
+      msg = "That side is through fair (100). Try 99 / 101.";
+    else msg = "A bit wide or off-centre — tighten it. Try 99 / 101.";
+    showCoach(
+      '<div class="step">Walkthrough 3 / 5</div>' +
+      '<span style="color:var(--warn)">' + msg + '</span><br>' +
+      'Retry: enter bid first, return, then ask, return.'
+    );
+    setTimeout(() => {
+      tutPhase = "mm-bid";
+      mmStage = "bid"; mmBid = mmAsk = null; entry = "";
+      $("bidVal").textContent = "\u00A0"; $("askVal").textContent = "\u00A0";
+      $("bidBox").className = "qbox bid active";
+      $("askBox").className = "qbox ask";
+      $("verdict").textContent = "\u00A0"; $("verdict").className = "verdict";
+    }, 900);
+  }
+}
+
+/* ---- MM size tiering tutorial step ----
+   Fixed round: abstract fair=100, requested size=500. Base tight target = 2;
+   effective target widens to ~2*(1+log10(500)) ≈ 7.4. A 99/101 quote (the
+   previous step's winner) now scores poorly because it's too tight for the
+   size — that's the lesson. We coach toward roughly 96 / 104.                */
+function tutorialToMMSize() {
+  tutPhase = "mm-size-bid";
+  // already in MM-mode widgets from previous step
+  round = { kind: "abstract", fair: 100, size: 500 };
+  renderMM();
+  running = true;
+  showCoach(
+    '<div class="step">Walkthrough 4 / 5</div>' +
+    'Size tiering. The counterparty wants to trade <b>500 lots</b> at fair 100. ' +
+    'A 1-wide market made sense for a small clearing — for 500 lots, you would ' +
+    'be adversely selected. Real market impact scales roughly with log(size), ' +
+    'so the acceptable spread widens accordingly.<br><br>' +
+    'Quote a wider market. Try <b>96 / 104</b> (mid still 100, but breathing room). ' +
+    'Enter <b>96</b>, return.'
+  );
+}
+
+function tutorialAfterSizeBid() {
+  if (tutPhase !== "mm-size-bid") return;
+  tutPhase = "mm-size-ask";
+  showCoach(
+    '<div class="step">Walkthrough 4 / 5</div>' +
+    'Now the ask, wider than before. Enter <b>104</b>, return.'
+  );
+}
+
+function checkTutorialSizeQuote() {
+  if (tutPhase !== "mm-size-ask") return;
+  const res = evalQuote(mmBid, mmAsk, 100, "tight", true, 500);
+  const good = res.score >= 70 && !res.why;   // be lenient — the lesson is "wider", not exact
+  $("bidBox").className = "qbox bid " + (good ? "flash-good" : "flash-bad");
+  $("askBox").className = "qbox ask " + (good ? "flash-good" : "flash-bad");
+  if (good) {
+    $("verdict").textContent = "Score " + res.score +
+      " — wider quote for size. Effective target ≈ " + fmt(res.target);
+    $("verdict").className = "verdict good";
+    tutPhase = "mm-size-done";
+    running = false;
+    setTimeout(() => {
+      coachWithButton(
+        '<div class="step">Walkthrough 4 / 5</div>' +
+        'Same scoring formula, but the width target now scales with size. ' +
+        'Tight markets for tiny clearings, wider for large ones — pick-offs ' +
+        'still score zero regardless. Tap Next for the P&amp;L drill.',
+        "Next", tutorialToPnl);
+    }, 280);
+  } else {
+    let msg;
+    if (res.why === "inverted") msg = "Ask must be above the bid — try 96 / 104.";
+    else if (res.why === "pickoff")
+      msg = "Through fair (100) — instant zero. Try 96 / 104.";
+    else if (res.width < 4) msg = "Too tight for 500 lots — you'll be picked off. Try 96 / 104.";
+    else msg = "Closer — try 96 / 104.";
+    showCoach(
+      '<div class="step">Walkthrough 4 / 5</div>' +
+      '<span style="color:var(--warn)">' + msg + '</span><br>' +
+      'Retry: bid, return, ask, return.'
+    );
+    setTimeout(() => {
+      tutPhase = "mm-size-bid";
+      mmStage = "bid"; mmBid = mmAsk = null; entry = "";
+      $("bidVal").textContent = "\u00A0"; $("askVal").textContent = "\u00A0";
+      $("bidBox").className = "qbox bid active";
+      $("askBox").className = "qbox ask";
+      $("verdict").textContent = "\u00A0"; $("verdict").className = "verdict";
+    }, 900);
+  }
+}
+
+/* ---- P&L tutorial step ----
+   Fixed round: Short call, K=100, premium=2.50, S_T=104, qty=1, mult=1.
+   Per-contract P&L = premium - max(S_T - K, 0) = 2.50 - 4 = -1.50.
+   This forces the student through the trap: short premium INCOME
+   minus the bad intrinsic outcome.                                    */
+function tutorialToPnl() {
+  tutPhase = "pnl";
+  $("answer").classList.remove("hidden");
+  $("quote").classList.add("hidden");
+  $("verdict").classList.add("hidden");
+  // Build a fixed P&L round
+  round = {
+    kind: "pnl", side: "short", instr: "call", K: 100, premium: 2.50,
+    S_T: 104, qty: 1, mult: 1,
+    intrinsic: 4, perContract: -1.50, totalPnL: -1.50, target: null
+  };
+  renderPnl();
+  entry = "";
+  $("answer").textContent = "\u00A0";
+  $("answer").className = "answer";
+  running = true;
+  showCoach(
+    '<div class="step">Walkthrough 5 / 5</div>' +
+    'P&amp;L at expiry. You are <b>short a call</b> at strike 100, collected premium 2.50. ' +
+    'Stock closed at 104, so the call is worth max(104&minus;100, 0) = <b>4</b>.<br><br>' +
+    'Short means you <b>receive</b> premium but pay the intrinsic: ' +
+    '<b>P&amp;L = 2.50 &minus; 4 = &minus;1.50</b>.<br>' +
+    'Type <b>-1.5</b> and hit return.'
+  );
+}
+
+function checkTutorialPnl() {
+  if (tutPhase !== "pnl") return;
+  if (entry === "" || entry === "-" || entry === ".") return;
+  const guess = parseFloat(entry);
+  const correct = -1.50;
+  const box = $("answer");
+  if (Math.abs(guess - correct) < 0.011) {
+    box.className = "answer flash-good";
+    if (navigator.vibrate) navigator.vibrate(15);
+    tutPhase = "pnl-done";
+    running = false;
+    setTimeout(() => {
+      coachWithButton(
+        'That sign-flip on short premium is the single most common mistake. ' +
+        'The drill mixes long/short × call/put × ITM/OTM, so you cannot pattern-match. ' +
+        'With the multiplier toggle on, results scale by 100 for equity-option-style payoffs. ' +
+        'You are set. Tap Finish.',
+        "Finish", finishTutorial);
+    }, 280);
+  } else {
+    box.className = "answer flash-bad";
+    showCoach(
+      '<div class="step">Walkthrough 5 / 5</div>' +
+      'Not quite — short call: P&amp;L = premium received &minus; intrinsic paid out. ' +
+      '<b>2.50 &minus; 4 = &minus;1.50</b>. Try again.'
+    );
+    entry = "";
+    setTimeout(() => { box.className = "answer"; box.textContent = "\u00A0"; }, 600);
+  }
+}
+
+function finishTutorial() {
+  tutorial = false;
+  tutPhase = "idle";
+  cfg.tutorialDone = true; saveCfg();
+  clearCoach();
+  $("app").classList.add("hidden");
+  $("startScreen").classList.remove("hidden");
+}
+
+/* ============================================================
+   HISTORY  +  TREND CHARTS
+   ============================================================ */
+let histTab = "parity";
+
+function openHistory() {
+  running = false;
+  cancelAnimationFrame(tickHandle);
+  ["app","startScreen","endScreen","settingsScreen"].forEach(s => $(s).classList.add("hidden"));
+  $("historyScreen").classList.remove("hidden");
+  paintHistTabs();
+  renderHistory();
+}
+
+function paintHistTabs() {
+  $("histTabs").querySelectorAll("button").forEach(b => {
+    b.classList.toggle("on", b.dataset.v === histTab);
+  });
+}
+
+function renderHistory() {
+  const rows = history.filter(h => h.mode === histTab);
+  const list = $("histList");
+  list.innerHTML = "";
+
+  const modeLabel = histTab === "parity" ? "parity"
+                  : histTab === "pnl"    ? "P&L"
+                  : "market-making";
+
+  if (rows.length === 0) {
+    list.innerHTML = '<div class="empty">No ' + modeLabel +
+      ' sessions yet. Finish a session and it lands here.</div>';
+  }
+
+  // newest first in the list
+  for (let i = rows.length - 1; i >= 0; i--) {
+    const h = rows[i];
+    const d = new Date(h.ts);
+    const when = d.toLocaleDateString(undefined, { month: "short", day: "numeric" }) +
+                 " " + d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+    const row = document.createElement("div");
+    row.className = "histrow";
+    if (histTab === "mm") {
+      row.innerHTML =
+        '<span><span class="main">avg ' + h.avgScore + '</span>' +
+        ' <span class="detail">· ' + h.quotes + ' quotes · ' + h.pickoffs + ' picked off</span></span>' +
+        '<span class="when">' + when + '</span>';
+    } else {
+      // parity + pnl share the solved/accuracy shape
+      const extra = histTab === "pnl" && h.multiplier > 1
+        ? ' · ×' + h.multiplier : '';
+      row.innerHTML =
+        '<span><span class="main">' + h.solved + ' solved</span>' +
+        ' <span class="detail">· ' + h.accuracy + '% · streak ' + h.bestStreak + extra +
+        '</span></span>' +
+        '<span class="when">' + when + '</span>';
+    }
+    list.appendChild(row);
+  }
+
+  drawTrendChart(rows);
+}
+
+/* Lightweight canvas line chart — one dependency-free trend line.
+   Parity & P&L: solve-rate (solved/min).  MM: avg score 0-100. */
+function drawTrendChart(rows) {
+  const cv = $("histChart");
+  const ctx = cv.getContext("2d");
+  const cssW = cv.clientWidth || 440, cssH = 160;
+  const dpr = window.devicePixelRatio || 1;
+  cv.width = cssW * dpr; cv.height = cssH * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, cssW, cssH);
+
+  const isMM = histTab === "mm";
+  $("chartTitle").textContent = isMM
+    ? "Avg score (0–100) — last " + rows.length + " sessions"
+    : "Solve rate (solved / min) — last " + rows.length + " sessions";
+
+  if (rows.length < 2) {
+    ctx.fillStyle = "#8b949e";
+    ctx.font = "12px monospace";
+    ctx.textAlign = "center";
+    ctx.fillText("Need at least 2 sessions to plot a trend.", cssW / 2, cssH / 2);
+    return;
+  }
+
+  const vals = rows.map(h => isMM ? h.avgScore : h.rate);
+  const padL = 34, padR = 10, padT = 12, padB = 20;
+  const plotW = cssW - padL - padR, plotH = cssH - padT - padB;
+
+  let lo = Math.min.apply(null, vals);
+  let hi = Math.max.apply(null, vals);
+  if (!isMM) { lo = Math.min(lo, 0); }
+  else { lo = Math.min(lo, 0); hi = Math.max(hi, 100); }
+  if (hi - lo < 1e-6) hi = lo + 1;
+  const pad = (hi - lo) * 0.1;
+  lo -= pad; hi += pad;
+
+  const x = i => padL + (plotW * i) / (vals.length - 1);
+  const y = v => padT + plotH * (1 - (v - lo) / (hi - lo));
+
+  // axes / gridlines
+  ctx.strokeStyle = "#30363d";
+  ctx.lineWidth = 1;
+  ctx.fillStyle = "#8b949e";
+  ctx.font = "10px monospace";
+  ctx.textAlign = "right";
+  for (let g = 0; g <= 2; g++) {
+    const v = lo + (hi - lo) * g / 2;
+    const yy = y(v);
+    ctx.beginPath();
+    ctx.moveTo(padL, yy); ctx.lineTo(cssW - padR, yy);
+    ctx.stroke();
+    ctx.fillText((Math.round(v * 10) / 10).toString(), padL - 5, yy + 3);
+  }
+
+  // trend line
+  ctx.strokeStyle = "#58a6ff";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  vals.forEach((v, i) => {
+    const px = x(i), py = y(v);
+    if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+  });
+  ctx.stroke();
+
+  // points
+  ctx.fillStyle = "#58a6ff";
+  vals.forEach((v, i) => {
+    ctx.beginPath();
+    ctx.arc(x(i), y(v), 2.6, 0, Math.PI * 2);
+    ctx.fill();
+  });
+
+  // simple linear-fit guide line (least squares) — shows the real trend
+  const n = vals.length;
+  let sx = 0, sy = 0, sxx = 0, sxy = 0;
+  vals.forEach((v, i) => { sx += i; sy += v; sxx += i * i; sxy += i * v; });
+  const denom = n * sxx - sx * sx;
+  if (Math.abs(denom) > 1e-9) {
+    const slope = (n * sxy - sx * sy) / denom;
+    const intl = (sy - slope * sx) / n;
+    ctx.strokeStyle = "rgba(210,153,34,0.7)";
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 3]);
+    ctx.beginPath();
+    ctx.moveTo(x(0), y(intl));
+    ctx.lineTo(x(n - 1), y(intl + slope * (n - 1)));
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+}
+
+/* ---- export / clear ---- */
+function exportHistory() {
+  const blob = new Blob([JSON.stringify(history, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "trader-drill-history.json";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+function clearHistory() {
+  if (!confirm("Delete all stored sessions? This cannot be undone.")) return;
+  history = [];
+  saveHistory();
+  updateHistCount();
+}
+function updateHistCount() {
+  $("histCount").textContent = history.length + " session" + (history.length === 1 ? "" : "s") + " stored";
+}
+
+/* ============================================================
+   SETTINGS UI
+   ============================================================ */
+function paintSeg(segId, key) {
+  $(segId).querySelectorAll("button").forEach(b => {
+    b.classList.toggle("on", b.dataset.v === String(cfg[key]));
+  });
+}
+function wireSeg(segId, key, after) {
+  $(segId).querySelectorAll("button").forEach(b => {
+    b.addEventListener("click", () => {
+      cfg[key] = b.dataset.v;
+      paintSeg(segId, key); saveCfg();
+      if (after) after();
+    });
+  });
+}
+function paintMode() {
+  $("modeSwitch").querySelectorAll("button").forEach(b => {
+    b.classList.toggle("on", b.dataset.v === cfg.mode);
+  });
+}
+$("modeSwitch").querySelectorAll("button").forEach(b => {
+  b.addEventListener("click", () => {
+    cfg.mode = b.dataset.v; paintMode(); saveCfg(); refreshStartSub();
+  });
+});
+function syncRoundSecsRow() {
+  $("rowRoundSecs").style.display = cfg.mmTimer === "round" ? "" : "none";
+}
+function openSettings() {
+  running = false;
+  cancelAnimationFrame(tickHandle);
+  $("setDuration").value = cfg.duration;
+  $("setRoundSecs").value = cfg.roundSecs;
+  $("setPnlMultValue").value = cfg.pnlMultValue;
+  paintSeg("segStrike", "strike");
+  paintSeg("segParityModel", "parityModel");
+  paintSeg("segSimpleDecimals", "simpleDecimals");
+  paintSeg("segUnknown", "unknown");
+  paintSeg("segDiscount", "discount");
+  paintSeg("segInstr", "instrument");
+  paintSeg("segWidth", "width");
+  paintSeg("segMMTimer", "mmTimer");
+  paintSeg("segPickoff", "pickoff");
+  paintSeg("segShowSize", "showSize");
+  paintSeg("segSizeRange", "sizeRange");
+  paintSeg("segPnlQty", "pnlQuantity");
+  paintSeg("segPnlMult", "pnlMultiplier");
+  syncRoundSecsRow();
+  syncDiscountRow();
+  syncSimpleDecimalsRow();
+  syncPnlMultRow();
+  syncSizeRangeRow();
+  updateHistCount();
+  ["app","startScreen","endScreen","historyScreen"].forEach(s => $(s).classList.add("hidden"));
+  $("settingsScreen").classList.remove("hidden");
+}
+function refreshStartSub() {
+  if (cfg.mode === "parity") {
+    const u = cfg.unknown === "random" ? "random leg" : KEY_NAME[cfg.unknown];
+    const modelTxt = cfg.parityModel === "real" ? "real (straddle+r/c)" :
+      ("simple" + (cfg.discount === "on" ? " · discounted" : " · zero-rate"));
+    $("startSub").textContent = cfg.duration + "s · solve " + u + " · " + modelTxt;
+  } else if (cfg.mode === "pnl") {
+    const qtyTxt = cfg.pnlQuantity === "single" ? "qty 1" :
+                   cfg.pnlQuantity === "small" ? "qty 2–10" : "qty 10–100";
+    const multTxt = cfg.pnlMultiplier === "on" ? (" · ×" + cfg.pnlMultValue) : " · per-contract";
+    $("startSub").textContent = cfg.duration + "s · single-leg P&L · " + qtyTxt + multTxt;
+  } else {
+    const t = cfg.mmTimer === "round" ? (cfg.roundSecs + "s/quote") : (cfg.duration + "s session");
+    const sizeTxt = cfg.showSize === "on" ? (" · size " + cfg.sizeRange) : "";
+    $("startSub").textContent = t + " · " + cfg.instrument + " · " +
+      cfg.width + " spread" + (cfg.pickoff === "on" ? " · pick-off on" : "") + sizeTxt;
+  }
+}
+
+/* ---- wiring ---- */
+wireSeg("segStrike", "strike");
+wireSeg("segParityModel", "parityModel", () => { syncDiscountRow(); syncSimpleDecimalsRow(); refreshStartSub(); });
+wireSeg("segSimpleDecimals", "simpleDecimals", refreshStartSub);
+wireSeg("segUnknown", "unknown", refreshStartSub);
+wireSeg("segDiscount", "discount", refreshStartSub);
+wireSeg("segInstr", "instrument", refreshStartSub);
+wireSeg("segWidth", "width", refreshStartSub);
+wireSeg("segMMTimer", "mmTimer", () => { syncRoundSecsRow(); refreshStartSub(); });
+wireSeg("segPickoff", "pickoff", refreshStartSub);
+wireSeg("segShowSize", "showSize", () => { syncSizeRangeRow(); refreshStartSub(); });
+wireSeg("segSizeRange", "sizeRange", refreshStartSub);
+wireSeg("segPnlQty", "pnlQuantity", refreshStartSub);
+wireSeg("segPnlMult", "pnlMultiplier", () => { syncPnlMultRow(); refreshStartSub(); });
+
+function syncSizeRangeRow() {
+  $("rowSizeRange").style.display = cfg.showSize === "on" ? "" : "none";
+}
+
+function syncPnlMultRow() {
+  $("rowPnlMultValue").style.display = cfg.pnlMultiplier === "on" ? "" : "none";
+}
+
+function syncDiscountRow() {
+  $("rowDiscount").style.display = cfg.parityModel === "simple" ? "" : "none";
+}
+function syncSimpleDecimalsRow() {
+  $("rowSimpleDecimals").style.display = cfg.parityModel === "simple" ? "" : "none";
+}
+
+$("setDuration").addEventListener("change", e => {
+  let v = parseInt(e.target.value, 10);
+  if (isNaN(v)) v = DEFAULTS.duration;
+  cfg.duration = clamp(v, 30, 600);
+  e.target.value = cfg.duration; saveCfg(); refreshStartSub();
+});
+$("setRoundSecs").addEventListener("change", e => {
+  let v = parseInt(e.target.value, 10);
+  if (isNaN(v)) v = DEFAULTS.roundSecs;
+  cfg.roundSecs = clamp(v, 3, 30);
+  e.target.value = cfg.roundSecs; saveCfg(); refreshStartSub();
+});
+$("setPnlMultValue").addEventListener("change", e => {
+  let v = parseInt(e.target.value, 10);
+  if (isNaN(v)) v = DEFAULTS.pnlMultValue;
+  cfg.pnlMultValue = clamp(v, 1, 10000);
+  e.target.value = cfg.pnlMultValue; saveCfg(); refreshStartSub();
+});
+
+$("startBtn").addEventListener("click", startSession);
+$("againBtn").addEventListener("click", startSession);
+$("startTutorial").addEventListener("click", startTutorial);
+$("startHelp").addEventListener("click", () => {
+  running = false; cancelAnimationFrame(tickHandle);
+  ["app","startScreen","endScreen","settingsScreen","historyScreen"].forEach(s =>
+    $(s).classList.add("hidden"));
+  $("helpScreen").classList.remove("hidden");
+});
+$("helpDone").addEventListener("click", () => {
+  $("helpScreen").classList.add("hidden");
+  $("startScreen").classList.remove("hidden");
+});
+$("startHistory").addEventListener("click", openHistory);
+$("endHistory").addEventListener("click", openHistory);
+$("startSettings").addEventListener("click", openSettings);
+$("endSettings").addEventListener("click", openSettings);
+$("toSettings").addEventListener("click", openSettings);
+$("settingsDone").addEventListener("click", () => {
+  $("settingsScreen").classList.add("hidden");
+  refreshStartSub();
+  $("startScreen").classList.remove("hidden");
+});
+$("exportBtn").addEventListener("click", exportHistory);
+$("clearBtn").addEventListener("click", clearHistory);
+
+$("histTabs").querySelectorAll("button").forEach(b => {
+  b.addEventListener("click", () => { histTab = b.dataset.v; paintHistTabs(); renderHistory(); });
+});
+$("historyDone").addEventListener("click", () => {
+  $("historyScreen").classList.add("hidden");
+  $("startScreen").classList.remove("hidden");
+});
+// redraw chart on rotation/resize while history is open
+window.addEventListener("resize", () => {
+  if (!$("historyScreen").classList.contains("hidden")) {
+    drawTrendChart(history.filter(h => h.mode === histTab));
+  }
+});
+
+/* ---- boot ---- */
+buildKeypad();
+paintMode();
+refreshStartSub();
+// first-ever launch: nudge toward the walkthrough
+if (!cfg.tutorialDone) {
+  $("startSub").textContent = "First time? Tap Walkthrough for a 1-minute guided tour.";
+}
+</script>
+</body>
+</html>
